@@ -52,6 +52,28 @@ export default function (pi: ExtensionAPI) {
       };
     },
   });
+
+  pi.registerTool({
+    name: "webfetch",
+    label: "Web Fetch",
+    description: "Fetch content from an HTTP or HTTPS URL and return it as text, markdown, or HTML. Markdown is the default.",
+    parameters: Type.Object({
+      url: Type.String({ description: "HTTP or HTTPS URL to fetch" }),
+      format: Type.Optional(
+        Type.Union([Type.Literal("markdown"), Type.Literal("text"), Type.Literal("html")], {
+          description: "Output format. Defaults to markdown.",
+        }),
+      ),
+      timeout: Type.Optional(Type.Number({ description: "Timeout in seconds, default 30, maximum 120" })),
+    }),
+    async execute(_toolCallId, params: { url: string; format?: "markdown" | "text" | "html"; timeout?: number }) {
+      const result = await fetchUrl(params.url, params.format ?? "markdown", params.timeout ?? 30);
+      return {
+        content: [{ type: "text", text: result.output }],
+        details: { url: result.url, contentType: result.contentType, format: result.format },
+      };
+    },
+  });
 }
 
 function selectProvider(override?: Provider): Provider {
@@ -144,4 +166,158 @@ function parsePayload(payload: string): string | undefined {
     result?: { content?: Array<{ type?: string; text?: string }> };
   };
   return parsed.result?.content?.find((item) => item.text)?.text;
+}
+
+type WebFetchFormat = "markdown" | "text" | "html";
+
+async function fetchUrl(urlText: string, format: WebFetchFormat, timeoutSeconds: number) {
+  const url = new URL(urlText);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("URL must use http:// or https://");
+  }
+
+  const timeout = Math.max(1, Math.min(timeoutSeconds, 120)) * 1000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url.toString(), {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+        Accept: acceptHeader(format),
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+
+    const contentType = response.headers.get("content-type") ?? "";
+    const mime = contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+    if (!isTextualMime(mime)) throw new Error(`Unsupported fetched content type: ${mime || contentType}`);
+
+    const body = await boundedText(response, 5 * 1024 * 1024);
+    return {
+      url: url.toString(),
+      contentType,
+      format,
+      output: convertBody(body, contentType, format),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function acceptHeader(format: WebFetchFormat) {
+  if (format === "markdown") return "text/markdown;q=1.0, text/plain;q=0.8, text/html;q=0.7, */*;q=0.1";
+  if (format === "text") return "text/plain;q=1.0, text/markdown;q=0.9, text/html;q=0.8, */*;q=0.1";
+  return "text/html;q=1.0, application/xhtml+xml;q=0.9, text/plain;q=0.8, */*;q=0.1";
+}
+
+function isTextualMime(mime: string) {
+  return (
+    !mime ||
+    mime.startsWith("text/") ||
+    mime === "application/json" ||
+    mime.endsWith("+json") ||
+    mime === "application/xml" ||
+    mime.endsWith("+xml") ||
+    mime === "application/javascript" ||
+    mime === "application/x-javascript"
+  );
+}
+
+async function boundedText(response: Response, maxBytes: number) {
+  const reader = response.body?.getReader();
+  if (!reader) return response.text();
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > maxBytes) throw new Error(`Response too large (exceeds ${maxBytes} bytes)`);
+    chunks.push(value);
+  }
+
+  const all = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    all.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(all);
+}
+
+function convertBody(body: string, contentType: string, format: WebFetchFormat) {
+  if (!contentType.toLowerCase().includes("text/html")) return body;
+  if (format === "html") return body;
+  if (format === "text") return htmlToText(body);
+  return htmlToMarkdown(body);
+}
+
+function htmlToText(html: string) {
+  return decodeHtmlEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+}
+
+function htmlToMarkdown(html: string) {
+  const main = extractMainHtml(html);
+  return decodeHtmlEntities(
+    main
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
+      .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, "\n# $1\n")
+      .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, "\n## $1\n")
+      .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, "\n### $1\n")
+      .replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, "\n#### $1\n")
+      .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, "\n- $1")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<\/div>/gi, "\n")
+      .replace(/<\/section>/gi, "\n")
+      .replace(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, "$2 ($1)")
+      .replace(/<[^>]+>/g, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim(),
+  );
+}
+
+function extractMainHtml(html: string) {
+  const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1];
+  if (main) return main;
+  const article = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1];
+  if (article) return article;
+  const body = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1];
+  return body ?? html;
+}
+
+function decodeHtmlEntities(text: string) {
+  const named: Record<string, string> = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: '"',
+    apos: "'",
+    nbsp: " ",
+  };
+  return text.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (_match, entity: string) => {
+    if (entity[0] === "#") {
+      const code = entity[1]?.toLowerCase() === "x" ? Number.parseInt(entity.slice(2), 16) : Number.parseInt(entity.slice(1), 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : _match;
+    }
+    return named[entity.toLowerCase()] ?? _match;
+  });
 }
