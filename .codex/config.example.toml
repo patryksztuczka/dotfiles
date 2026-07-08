@@ -1,0 +1,244 @@
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+personality = "pragmatic"
+
+notify = [
+  "/Users/patryk.sztuczka/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient",
+  "turn-ended",
+]
+approval_policy = "never"
+approvals_reviewer = "user"
+sandbox_mode = "danger-full-access"
+service_tier = "default"
+
+[features]
+hooks = true
+js_repl = false
+goals = true
+
+[[hooks.PostToolUse]]
+
+[[hooks.PostToolUse.hooks]]
+command = "/Users/patryk.sztuczka/.git-ai/bin/git-ai checkpoint codex --hook-input stdin"
+type = "command"
+
+[[hooks.PreToolUse]]
+
+[[hooks.PreToolUse.hooks]]
+command = "/Users/patryk.sztuczka/.git-ai/bin/git-ai checkpoint codex --hook-input stdin"
+type = "command"
+
+[[hooks.Stop]]
+
+[[hooks.Stop.hooks]]
+command = "/Users/patryk.sztuczka/.git-ai/bin/git-ai checkpoint codex --hook-input stdin"
+type = "command"
+
+[hooks.state."/Users/patryk.sztuczka/.codex/config.toml:post_tool_use:0:0"]
+enabled = true
+trusted_hash = "sha256:724bdfb651cb137743fa8d5e402e30336bda7f185bc6a326f28f6b56b33cfd73"
+
+[hooks.state."/Users/patryk.sztuczka/.codex/config.toml:pre_tool_use:0:0"]
+enabled = true
+trusted_hash = "sha256:59a2ae6c1b357f2f8f4b4ac039f0ddab1c74611cb47f815db2c3c15b8ad655db"
+
+[hooks.state."/Users/patryk.sztuczka/.codex/config.toml:stop:0:0"]
+enabled = true
+trusted_hash = "sha256:03ce2f62d568c164aa827ccaad2257a054b729496c4d18cbe166a0eea3e9ba00"
+
+[mcp_servers.node_repl]
+args = []
+command = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node_repl"
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = "/Applications/Codex.app/Contents/Resources/cua_node/lib/node_modules"
+NODE_REPL_NODE_PATH = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node"
+NODE_REPL_TRUSTED_CODE_PATHS = "/Users/patryk.sztuczka/.codex"
+CODEX_HOME = "/Users/patryk.sztuczka/.codex"
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "97669f77b3ca7114a2df05d55646416ea34b28100c07213ef9f643803449ef2f"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
+NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
+BROWSER_USE_CODEX_APP_VERSION = "26.623.141536"
+CODEX_CLI_PATH = "/Applications/Codex.app/Contents/Resources/codex"
+
+[mcp_servers.executor]
+enabled = true
+url = "https://executor.sh/patryk-s-organization/mcp"
+
+[mcp_servers.executor.http_headers]
+Authorization = "Bearer ${EXECUTOR_MCP_TOKEN}"
+
+[notice.model_migrations]
+"gpt-5.3-codex" = "gpt-5.4"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects/audiomatching"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects/ca-starter"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects/man-transport"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects/omd-research"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects/ssp-audiomatching"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/braining"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/cashworker-effect"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/gatekeeper"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/magisterka"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/random-stuff"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/uodo"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/effect-sandbox"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/t3code"]
+trust_level = "trusted"
+
+[projects."/home/agent/workspace"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/yt-scripts"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/jarred-the-assistant"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects/random-stuff"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/cashworker"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects/tasomix"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/pdf-util"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects/production-process"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects/ux-discovery"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects/processes"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/hermes-vps"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/radarpolska"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/gimmepaw"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/code-agency-projects/ads-analyzer"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/arduino"]
+trust_level = "trusted"
+
+[projects."/Users/patryk.sztuczka/Documents/my-projects/agenv"]
+trust_level = "trusted"
+
+[desktop]
+appearanceLightCodeThemeId = "rose-pine"
+appearanceDarkCodeThemeId = "rose-pine"
+keepRemoteControlAwakeWhilePluggedIn = true
+followUpQueueMode = "queue"
+conversationDetailMode = "STEPS_COMMANDS"
+
+[desktop.open-in-target-preferences]
+global = "zed"
+
+[desktop.open-in-target-preferences.perPath]
+"/Users/patryk.sztuczka/Documents/my-projects/jarred-the-assistant" = "zed"
+
+[desktop.appearanceLightChromeTheme]
+accent = "#d7827e"
+contrast = 40
+ink = "#575279"
+opaqueWindows = true
+surface = "#faf4ed"
+
+[desktop.appearanceLightChromeTheme.fonts]
+code = '"Geist Mono", ui-monospace, "SFMono-Regular"'
+ui = "Geist, Inter"
+
+[desktop.appearanceLightChromeTheme.semanticColors]
+diffAdded = "#56949f"
+diffRemoved = "#797593"
+skill = "#907aa9"
+
+[desktop.appearanceDarkChromeTheme]
+accent = "#ea9a97"
+contrast = 60
+ink = "#e0def4"
+opaqueWindows = true
+surface = "#232136"
+
+[desktop.appearanceDarkChromeTheme.fonts]
+ui = "Inter"
+
+[desktop.appearanceDarkChromeTheme.semanticColors]
+diffAdded = "#9ccfd8"
+diffRemoved = "#908caa"
+skill = "#c4a7e7"
+
+[marketplaces.openai-bundled]
+last_updated = "2026-07-08T07:31:56Z"
+source_type = "local"
+source = "/Users/patryk.sztuczka/.codex/.tmp/bundled-marketplaces/openai-bundled"
+
+[marketplaces.openai-primary-runtime]
+last_updated = "2026-07-01T06:41:29Z"
+source_type = "local"
+source = "/Users/patryk.sztuczka/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[plugins."template-creator@openai-primary-runtime"]
+enabled = true
+
+[plugins."computer-use@openai-bundled"]
+enabled = true
+
+[plugins."chrome@openai-bundled"]
+enabled = true
