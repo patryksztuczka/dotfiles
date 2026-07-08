@@ -1,9 +1,14 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Parser } from "htmlparser2";
+import TurndownService from "turndown";
 import { Type } from "typebox";
 
 const EXA_URL = "https://mcp.exa.ai/mcp";
 const PARALLEL_URL = "https://search.parallel.ai/mcp";
 const NO_RESULTS = "No search results found. Please try a different query.";
+const MAX_FETCH_RESPONSE_BYTES = 5 * 1024 * 1024;
+const DEFAULT_FETCH_TIMEOUT_SECONDS = 30;
+const MAX_FETCH_TIMEOUT_SECONDS = 120;
 
 type Provider = "exa" | "parallel";
 
@@ -67,7 +72,7 @@ export default function (pi: ExtensionAPI) {
       timeout: Type.Optional(Type.Number({ description: "Timeout in seconds, default 30, maximum 120" })),
     }),
     async execute(_toolCallId, params: { url: string; format?: "markdown" | "text" | "html"; timeout?: number }) {
-      const result = await fetchUrl(params.url, params.format ?? "markdown", params.timeout ?? 30);
+      const result = await fetchUrl(params.url, params.format ?? "markdown", params.timeout ?? DEFAULT_FETCH_TIMEOUT_SECONDS);
       return {
         content: [{ type: "text", text: result.output }],
         details: { url: result.url, contentType: result.contentType, format: result.format },
@@ -176,27 +181,23 @@ async function fetchUrl(urlText: string, format: WebFetchFormat, timeoutSeconds:
     throw new Error("URL must use http:// or https://");
   }
 
-  const timeout = Math.max(1, Math.min(timeoutSeconds, 120)) * 1000;
+  const timeout = Math.max(1, Math.min(timeoutSeconds, MAX_FETCH_TIMEOUT_SECONDS)) * 1000;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    const response = await fetch(url.toString(), {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-        Accept: acceptHeader(format),
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-      signal: controller.signal,
-    });
+    let response = await fetchWithUserAgent(url.toString(), format, browserUserAgent, controller.signal);
+    if (response.status === 403 && response.headers.get("cf-mitigated") === "challenge") {
+      response = await fetchWithUserAgent(url.toString(), format, "opencode", controller.signal);
+    }
 
     if (!response.ok) throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
 
     const contentType = response.headers.get("content-type") ?? "";
     const mime = contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
-    if (!isTextualMime(mime)) throw new Error(`Unsupported fetched content type: ${mime || contentType}`);
+    if (isImageAttachment(mime)) throw new Error(`Unsupported fetched image content type: ${mime}`);
+    if (!isTextualMime(mime)) throw new Error(`Unsupported fetched file content type: ${mime || contentType}`);
 
-    const body = await boundedText(response, 5 * 1024 * 1024);
+    const body = await boundedText(response, MAX_FETCH_RESPONSE_BYTES);
     return {
       url: url.toString(),
       contentType,
@@ -208,10 +209,28 @@ async function fetchUrl(urlText: string, format: WebFetchFormat, timeoutSeconds:
   }
 }
 
+const browserUserAgent =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
+
+function fetchWithUserAgent(url: string, format: WebFetchFormat, userAgent: string, signal: AbortSignal) {
+  return fetch(url, {
+    headers: {
+      "User-Agent": userAgent,
+      Accept: acceptHeader(format),
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+    signal,
+  });
+}
+
 function acceptHeader(format: WebFetchFormat) {
-  if (format === "markdown") return "text/markdown;q=1.0, text/plain;q=0.8, text/html;q=0.7, */*;q=0.1";
+  if (format === "markdown") return "text/markdown;q=1.0, text/x-markdown;q=0.9, text/plain;q=0.8, text/html;q=0.7, */*;q=0.1";
   if (format === "text") return "text/plain;q=1.0, text/markdown;q=0.9, text/html;q=0.8, */*;q=0.1";
-  return "text/html;q=1.0, application/xhtml+xml;q=0.9, text/plain;q=0.8, */*;q=0.1";
+  return "text/html;q=1.0, application/xhtml+xml;q=0.9, text/plain;q=0.8, text/markdown;q=0.7, */*;q=0.1";
+}
+
+function isImageAttachment(mime: string) {
+  return mime.startsWith("image/") && mime !== "image/svg+xml" && mime !== "image/vnd.fastbidsheet";
 }
 
 function isTextualMime(mime: string) {
@@ -259,65 +278,32 @@ function convertBody(body: string, contentType: string, format: WebFetchFormat) 
 }
 
 function htmlToText(html: string) {
-  return decodeHtmlEntities(
-    html
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim(),
-  );
+  let text = "";
+  let skipDepth = 0;
+  const parser = new Parser({
+    onopentag(name) {
+      if (skipDepth > 0 || ["script", "style", "noscript", "iframe", "object", "embed"].includes(name)) skipDepth++;
+    },
+    ontext(input) {
+      if (skipDepth === 0) text += input;
+    },
+    onclosetag() {
+      if (skipDepth > 0) skipDepth--;
+    },
+  });
+  parser.write(html);
+  parser.end();
+  return text.trim();
 }
 
 function htmlToMarkdown(html: string) {
-  const main = extractMainHtml(html);
-  return decodeHtmlEntities(
-    main
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
-      .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, "\n# $1\n")
-      .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, "\n## $1\n")
-      .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, "\n### $1\n")
-      .replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, "\n#### $1\n")
-      .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, "\n- $1")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/p>/gi, "\n\n")
-      .replace(/<\/div>/gi, "\n")
-      .replace(/<\/section>/gi, "\n")
-      .replace(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, "$2 ($1)")
-      .replace(/<[^>]+>/g, "")
-      .replace(/[ \t]+\n/g, "\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .replace(/[ \t]{2,}/g, " ")
-      .trim(),
-  );
-}
-
-function extractMainHtml(html: string) {
-  const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1];
-  if (main) return main;
-  const article = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1];
-  if (article) return article;
-  const body = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1];
-  return body ?? html;
-}
-
-function decodeHtmlEntities(text: string) {
-  const named: Record<string, string> = {
-    amp: "&",
-    lt: "<",
-    gt: ">",
-    quot: '"',
-    apos: "'",
-    nbsp: " ",
-  };
-  return text.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (_match, entity: string) => {
-    if (entity[0] === "#") {
-      const code = entity[1]?.toLowerCase() === "x" ? Number.parseInt(entity.slice(2), 16) : Number.parseInt(entity.slice(1), 10);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : _match;
-    }
-    return named[entity.toLowerCase()] ?? _match;
+  const turndown = new TurndownService({
+    headingStyle: "atx",
+    hr: "---",
+    bulletListMarker: "-",
+    codeBlockStyle: "fenced",
+    emDelimiter: "*",
   });
+  turndown.remove(["script", "style", "meta", "link"]);
+  return turndown.turndown(html);
 }
