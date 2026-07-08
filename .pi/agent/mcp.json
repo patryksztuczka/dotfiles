@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "executor": {
+      "url": "https://executor.sh/patryk-s-organization/mcp",
+      "headers": {
+        "Authorization": "Bearer ${EXECUTOR_MCP_TOKEN}"
+      }
+    }
+  }
+}
